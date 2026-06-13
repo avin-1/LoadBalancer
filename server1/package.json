@@ -1,0 +1,12 @@
+{
+  "name": "server1",
+  "version": "1.0.0",
+  "description": "Test Backend Server 1 for HTTPS Load Balancer",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

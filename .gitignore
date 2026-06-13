@@ -1,0 +1,8 @@
+# Dependency directories
+node_modules/
+
+# Compiled Java class files
+*.class
+
+# Build/compiled output directory
+bin/
