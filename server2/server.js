@@ -1,4 +1,7 @@
 const express = require('express');
+const https = require('https');
+const fs = require('fs');
+const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3002;
 
@@ -22,6 +25,11 @@ app.all('*', (req, res) => {
     });
 });
 
-app.listen(PORT, () => {
-    console.log(`🚀 Backend Server 2 is running on port ${PORT}`);
+const options = {
+    key: fs.readFileSync(path.join(__dirname, '../cert.key')),
+    cert: fs.readFileSync(path.join(__dirname, '../cert.crt'))
+};
+
+https.createServer(options, app).listen(PORT, () => {
+    console.log(`🚀 Backend Server 2 is running on port ${PORT} (HTTPS)`);
 });

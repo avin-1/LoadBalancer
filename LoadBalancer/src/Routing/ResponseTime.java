@@ -16,6 +16,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
+import java.security.SecureRandom;
+import java.security.cert.X509Certificate;
 
 /**
  * The ResponseTime class connects to a designated server at a regular 
@@ -25,10 +30,10 @@ import java.util.concurrent.TimeUnit;
  */
 public class ResponseTime {
     // Array of server URLs to poll simultaneously
-    private static final String[] TARGET_URLS = {
-        "http://localhost:3001/",
-        "http://localhost:3002/",
-        "http://localhost:3003/"
+    public static final String[] TARGET_URLS = {
+        "https://localhost:3001/",
+        "https://localhost:3002/",
+        "https://localhost:3003/"
     };
     // polling interval set to 5
     private static final int POLL_INTERVAL_SECONDS = 5;
@@ -57,8 +62,25 @@ public class ResponseTime {
      * and a dedicated background scheduling thread.
      */
     public ResponseTime() {
-        // here i built a reusable http client with 5 second connection timeout
-        this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+        try {
+            TrustManager[] trustAllCerts = new TrustManager[]{
+                new X509TrustManager() {
+                    public X509Certificate[] getAcceptedIssuers() { return null; }
+                    public void checkClientTrusted(X509Certificate[] certs, String authType) {}
+                    public void checkServerTrusted(X509Certificate[] certs, String authType) {}
+                }
+            };
+            SSLContext sslContext = SSLContext.getInstance("TLS");
+            sslContext.init(null, trustAllCerts, new SecureRandom());
+            
+            // here i built a reusable http client with 5 second connection timeout
+            this.httpClient = HttpClient.newBuilder()
+                .sslContext(sslContext)
+                .connectTimeout(Duration.ofSeconds(5))
+                .build();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to configure SSL", e);
+        }
         // create a thread pool scheduler with threads equal to the number of URLs
         this.scheduler = Executors.newScheduledThreadPool(TARGET_URLS.length);
     }
