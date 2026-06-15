@@ -1,0 +1,12 @@
+{
+  "proxyPort": 443,
+  "workerPoolSize": 4,
+  "rateLimitCapacity": 100,
+  "rateLimitRefill": 10,
+  "healthCheckIntervalMs": 2000,
+  "backends": [
+    "https://localhost:3001/",
+    "https://localhost:3002/",
+    "https://localhost:3003/"
+  ]
+}

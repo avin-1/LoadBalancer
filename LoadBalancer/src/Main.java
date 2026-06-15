@@ -237,6 +237,10 @@ public class Main {
      */
     public static void main(String[] args) throws Exception {
 
+        // ── BOOTSTRAP: Load Configuration and start Health Poller ──
+        Config.ConfigLoader.load("config.json");
+        new Routing.ResponseTime().startPolling();
+
         // ════════════════════════════════════════════════════════════════
         // STEP 1: Load the TLS Certificate Keystore from disk
         // ════════════════════════════════════════════════════════════════
@@ -311,7 +315,7 @@ public class Main {
         //   memory, improving overall CPU utilization. For I/O-bound tasks, a higher
         //   multiplier would be used.
 
-        workerPool = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2);
+        workerPool = Executors.newFixedThreadPool(Config.ConfigLoader.getInstance().workerPoolSize);
 
         // ════════════════════════════════════════════════════════════════
         // STEP 4: Create and configure the NIO Selector and Server Channel
@@ -339,10 +343,11 @@ public class Main {
         Selector selector = Selector.open();
         ServerSocketChannel serverChannel = ServerSocketChannel.open();
         serverChannel.configureBlocking(false);                       // Non-blocking mode
-        serverChannel.bind(new InetSocketAddress(PORT));              // Bind to port 8443
+        int port = Config.ConfigLoader.getInstance().proxyPort;
+        serverChannel.bind(new InetSocketAddress(port));              // Bind to configured port
         serverChannel.register(selector, SelectionKey.OP_ACCEPT);    // Listen for connections
 
-        System.out.println("Java NIO Selector-based HTTPS Server Running on port " + PORT);
+        System.out.println("Java NIO Selector-based HTTPS Server Running on port " + port);
 
         // ════════════════════════════════════════════════════════════════
         // STEP 5: THE MAIN EVENT LOOP
@@ -1104,22 +1109,34 @@ public class Main {
 
                     // Log the request details for debugging/monitoring.
                     InetAddress addr = channel.socket().getInetAddress();
-                    String clientIp = (addr != null) ? addr.getHostAddress() : "unknown";
+                    String clientIp = (addr != null) ? addr.getHostAddress() : "127.0.0.1";
+                    
+                    // ── Step 5b: Mutate Headers ──
+                    String mutatedReq = HttpParser.HeaderMutator.mutate(reqStr, clientIp);
+
+                    // ── Step 5c: Routing Decision ──
+                    String chosenBackend = Routing.Routing.getServer(clientIp);
+
                     System.out.println("Client IP: " + clientIp);
                     System.out.println("Method:    " + request.method);
                     System.out.println("Path:      " + request.path);
-                    System.out.println("Headers:   " + request.headers);
+                    System.out.println("Routed to: " + chosenBackend);
                     System.out.println();
 
                     // ── Step 6: Build the HTTP response ──
-                    // This is a minimal HTTP/1.1 200 OK response. In a real load balancer,
-                    // this would be the PROXIED response from the backend server.
-                    // "Connection: close" tells the client not to expect keep-alive (HTTP/1.0 style).
-                    String response = "HTTP/1.1 200 OK\r\n" +
-                                      "Content-Type: text/plain\r\n" +
-                                      "Content-Length: 2\r\n" +      // Length of the body "OK"
-                                      "Connection: close\r\n\r\n" +  // End of headers (blank line)
-                                      "OK";                          // The response body
+                    // This echoes the mutated request to simulate the proxy boundary for JMeter.
+                    String response;
+                    if (chosenBackend == null) {
+                        response = "HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\nNo healthy backends.";
+                    } else {
+                        String bodyStr = "ROUTED_TO: " + chosenBackend + "\n" +
+                                         "MUTATED_REQUEST:\n" + mutatedReq;
+                        response = "HTTP/1.1 200 OK\r\n" +
+                                   "Content-Type: text/plain\r\n" +
+                                   "Content-Length: " + bodyStr.getBytes().length + "\r\n" +
+                                   "Connection: close\r\n\r\n" +
+                                   bodyStr;
+                    }
 
                     // ── Step 7: Encrypt the response using TLS ──
                     // engine.wrap() takes plaintext (appResponse) and encrypts it into myNetData.
